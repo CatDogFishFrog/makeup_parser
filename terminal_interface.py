@@ -49,12 +49,17 @@ def main():
                         type=str,
                         required=False
                         )
+    parser.add_argument('--full', '-f',
+                            help=".(Опціонально) Якщо додати цей тег, то виведе повну таблицю, без перевірок на ціну. Приклад: create.exe -s -f",
+                            action='store_true',
+                            required=False
+                            )
 
 
     args = parser.parse_args()
     
     if args.start != False:
-        make_xlsx.make_xlsx(args.path_in, args.path_out)
+        make_xlsx.make_xlsx(args.path_in, args.path_out, args.full)
     
     
     

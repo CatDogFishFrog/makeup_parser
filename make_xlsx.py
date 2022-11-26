@@ -12,7 +12,7 @@ def try_except(input_func):
     return output_func 
 
 @try_except
-def make_xlsx(path_in:str='input_table.csv', path_out:str = 'out_table.xlsx'):
+def make_xlsx(path_in:str='input_table.csv', path_out:str = 'out_table.xlsx', full_table = False):
     if not os.path.exists(path_in):
         print('Вхідного файла не існує. По стандарту він має мати назву "input_table.csv". Або уведіть свою назву та шлях дофайлу, за допомогою тегу -pi')
         with open('errors.txt', 'a') as file:
@@ -70,7 +70,7 @@ def make_xlsx(path_in:str='input_table.csv', path_out:str = 'out_table.xlsx'):
             
             for pos in product['positions']:  
                 price = pos['price']
-                if ref_prise < price or ((i[1] != '') and i[1] not in pos['title']): continue
+                if (ref_prise < price or ((i[1] != '') and i[1] not in pos['title'])) and not full_table: continue
                 product_new['check'] = True
                 product_new['positions'].append(pos)
                 
