@@ -17,12 +17,12 @@ def parse_makeup(url):
     product['url'] = url
     responce = requests.get(url, headers=headers)
     soup = BeautifulSoup(responce.text, 'lxml')
-    data = soup.find('div', class_='product-item__buy')
-    data1 = data.find_all('div', class_='variant')
+    product_item__buy = soup.find('div', class_='product-item__buy')
+    variants = product_item__buy.find_all('div', class_='variant')
     
     product['name'] = soup.find('span', class_='product-item__name').text
     
-    for i in data1:
+    for i in variants:
         position = {}
         position['title'] = i.get('title')
         position['eu'] = i.find('i', class_='eu rus') != None
@@ -30,4 +30,3 @@ def parse_makeup(url):
         product['positions'].append(position)
         
     return product
-
