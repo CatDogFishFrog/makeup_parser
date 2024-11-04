@@ -1,6 +1,6 @@
 import requests
 from bs4 import BeautifulSoup
-from typing import Optional, List, Dict
+from typing import Optional, List
 from singletons.logger import get_logger
 from singletons.config import Config
 import re
@@ -9,12 +9,24 @@ import re
 config = Config()
 logger = get_logger()
 
+class Variant:
+    """Represents a single variant of a product with title, EU status, and price."""
+    def __init__(self, title: Optional[str], eu: bool, price: int):
+        self.title = title
+        self.eu = eu
+        self.price = price
+
+    def __str__(self) -> str:
+        """String representation for logging and debugging."""
+        eu_status = "EU" if self.eu else "UA"
+        return f"Variant(title={self.title}, price={self.price}, region={eu_status})"
+
 class Product:
     def __init__(
         self,
         name: str,
         url: str,
-        positions: List[Dict],
+        positions: List[Variant],
         info: Optional[str] = None,
         on_sale: Optional[bool] = None,
         has_error: Optional[bool] = False
@@ -25,6 +37,12 @@ class Product:
         self.info = info
         self.on_sale = on_sale
         self.has_error = has_error
+
+    def __str__(self) -> str:
+        """String representation for logging and debugging."""
+        sale_status = "On sale" if self.on_sale else "Regular"
+        error_status = "Error encountered" if self.has_error else "No errors"
+        return f"Product(name={self.name}, url={self.url}, sale_status={sale_status}, error_status={error_status})"
 
     @classmethod
     def from_url(cls, url: str) -> "Product":
@@ -77,7 +95,9 @@ class Product:
                         price_str = variant.get("data-price")
                         if price_str and price_str.isdigit():
                             price = int(price_str)
-                            positions.append({"title": title, "eu": eu, "price": price})
+                            variant_obj = Variant(title=title, eu=eu, price=price)
+                            positions.append(variant_obj)
+                            logger.debug(f"Parsed variant: {variant_obj}")
                         else:
                             logger.warning(f"Invalid or missing price for variant '{title if title else '???'}' at {url}")
                             info_list.append(f"Invalid price for '{title if title else '???'}'")
@@ -89,8 +109,8 @@ class Product:
             return cls(name=name, url=url, positions=positions, on_sale=sale, info=", ".join(info_list) if info_list else None)
 
         except requests.RequestException as e:
-            error_message = f"Product not exist! Error fetching product data from URL {url}: {e}"
-            info_list.append("Product not exist!")
+            error_message = f"Product does not exist! Error fetching product data from URL {url}: {e}"
+            info_list.append("Product does not exist!")
             logger.error(error_message)
             return cls(name=name if name else "Unknown", url=url, positions=positions, info=", ".join(info_list) if info_list else None, has_error=True)
 
@@ -130,4 +150,6 @@ def get_usd() -> float:
 if __name__ == "__main__":
     product = Product.from_url("https://makeup.com.ua/ua/product/891656/")
     print(product)
+    for position in product.positions:
+        print(position)
     print(get_usd())
