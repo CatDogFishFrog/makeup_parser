@@ -51,13 +51,13 @@ def main():
                             )
     
     argument_parser.add_argument('--path_in', '-pi',
-                        help='(Опціонально) Обрати розташування файлу з вхідною таблицею. Приклад 1: create.exe -s -pi "C:\\Users\Public\\Documents\\input.csv", Приклад 2: create.exe -s -p input.csv',
+                        help='(Опціонально) Обрати розташування файлу з вхідною таблицею. Приклад 1: create.exe -s -pi "C:\\Users\\Public\\Documents\\input.csv", Приклад 2: create.exe -s -p input.csv',
                         default='input_table.csv',
                         type=str,
                         required=False
                         )
     argument_parser.add_argument('--path_out', '-po',
-                        help='(Опціонально) Обрати розташування файлу з вихідною таблицею. Приклад 1: create.exe -s -po "C:\\Users\Public\\Documents\\output.xlsx", Приклад 2: create.exe -s -po output.xlsx',
+                        help='(Опціонально) Обрати розташування файлу з вихідною таблицею. Приклад 1: create.exe -s -po "C:\\Users\\Public\\Documents\\output.xlsx", Приклад 2: create.exe -s -po output.xlsx',
                         default='out_table.xlsx',
                         type=str,
                         required=False
