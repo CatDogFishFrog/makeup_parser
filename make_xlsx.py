@@ -1,104 +1,97 @@
 import xlsxwriter
 import csv
 import os
-from typing import List
+from typing import List, Optional
 from tqdm import tqdm
 from parser import Product, get_usd
 from singletons.logger import get_logger
 from singletons.config import Config
 
-# Конфігурація та логування
+# Configuration and logger
 config = Config()
 logger = get_logger()
 
-
 def load_input_data(path_input: str) -> List[List[str]]:
-    """Завантажує дані з вхідного файлу CSV."""
+    """Loads data from the input CSV file."""
     if not os.path.exists(path_input):
-        logger.error(f"Вхідного файла не існує: {path_input}")
-        raise FileNotFoundError(f"Вхідного файла не існує: {path_input}")
+        logger.error(f"Input file does not exist: {path_input}")
+        raise FileNotFoundError(f"Input file does not exist: {path_input}")
 
     with open(path_input, "r") as file_in:
         reader = csv.reader(file_in, delimiter=";")
         return list(reader)
 
-
 def initialize_workbook(path_output: str):
-    """Ініціалізує вихідну книгу Excel та лист з форматом колонок."""
+    """Initializes an Excel workbook with column formatting and headers."""
     if os.path.exists(path_output):
         os.remove(path_output)
-        logger.info(f"Старий файл {path_output} видалено.")
+        logger.info(f"Old file {path_output} deleted.")
 
     workbook = xlsxwriter.Workbook(path_output)
-    worksheet = workbook.add_worksheet("output_list")
+    worksheet = workbook.add_worksheet("Products")
 
     formats = {
         "bold": workbook.add_format({"bold": True}),
-        "italic": workbook.add_format({"italic": True})
+        "italic": workbook.add_format({"italic": True}),
+        "highlight": workbook.add_format({"bg_color": "#C6EFCE", "bold": True}),
     }
 
-    setup_worksheet(worksheet, formats["bold"])
+    headers = ["Product Name", "Variant", "Ref Price", "Makeup Price", "Region", "URL", "Info"]
+    for col_num, header in enumerate(headers):
+        worksheet.write(0, col_num, header, formats["bold"])
+
+    worksheet.set_column(0, 0, 35)
+    worksheet.set_column(1, 1, 25)
+    worksheet.set_column(2, 3, 12)
+    worksheet.set_column(4, 4, 10)
+    worksheet.set_column(5, 5, 40)
+    worksheet.set_column(6, 6, 50)
+
     return workbook, worksheet, formats
 
-
-def setup_worksheet(worksheet, bold_format):
-    """Налаштовує форматування колонок і заголовків."""
-    worksheet.set_column(0, 0, 35)
-    worksheet.set_column(1, 1, 20)
-    worksheet.set_column(2, 2, 6)
-    worksheet.set_column(3, 3, 6)
-    worksheet.set_column(4, 4, 3)
-    worksheet.set_column(5, 5, 40)
-
-    headers = ["Назва товару", "Варіант", "ref Ціна", "makeup Ціна", "Склад", "URL", "info"]
-    for col_num, header in enumerate(headers):
-        worksheet.write(0, col_num, header, bold_format)
-
-
-def parse_ref_price(row: List[str], usd_rate: float) -> int | None:
-    """Парсить і конвертує референсну ціну."""
+def parse_ref_price(row: List[str], usd_rate: float) -> Optional[int]:
+    """Parses and converts the reference price."""
     try:
         if row[2]:
             return round(float(row[2].replace(",", ".")) * usd_rate)
         elif row[3]:
             return int(row[3])
     except ValueError:
-        logger.warning(f"Некоректне значення ref price: {row}")
+        logger.warning(f"Invalid ref price value: {row}")
     return None
 
-
-def process_product_row(product: Product, ref_price: int, full_table: bool) -> List[List]:
-    """Обробляє окремий продукт для запису в Excel."""
+def process_product_row(product: Product, ref_price: int, target_variant: str = None) -> List[List]:
+    """Processes a single product for Excel output."""
     rows = []
     for variant in product.positions:
-        if ref_price < variant['price'] or (variant['title'] and row[1] not in variant['title'] and not full_table):
+        if target_variant and target_variant not in (variant.title or ""):
             continue
-        row = [
-            product.name,
-            variant["title"],
-            ref_price,
-            variant["price"],
-            "EU" if variant["eu"] else "UA",
-            product.url,
-            product.info or ""
-        ]
-        rows.append(row)
+        effective_price = variant.price * 2 / 3 if product.on_sale else variant.price
+        if effective_price < ref_price or product.has_error:
+            row = [
+                product.name,
+                variant.title,
+                ref_price,
+                effective_price,
+                "EU" if variant.eu else "UA",
+                product.url,
+                product.info or "",
+            ]
+            rows.append(row)
     return rows
 
-
-def write_products(worksheet, products, linecount, formats):
-    """Записує дані продуктів у таблицю."""
+def write_products(worksheet, products: List[List], linecount: int, formats) -> int:
+    """Writes processed product data to the Excel worksheet."""
     for product in products:
         for row in product:
             for col_num, cell_data in enumerate(row):
-                worksheet.write(linecount, col_num, cell_data,
-                                formats["bold"] if col_num in [0, 1] else formats.get("italic", None))
+                format_to_use = formats["highlight"] if col_num == 3 and "On sale" in row else formats["italic"]
+                worksheet.write(linecount, col_num, cell_data, format_to_use)
             linecount += 1
     return linecount
 
-
-def make_xlsx(path_input: str = 'input_table.csv', path_output: str = 'out_table.xlsx', full_table: bool = False):
-    """Основна функція для створення таблиці Excel з обробкою продуктів."""
+def process_product_list(path_input: str = 'input_table.csv', path_output: str = 'out_table.xlsx'):
+    """Main function to create Excel table with processed products."""
     try:
         data_rows = load_input_data(path_input)
         usd_rate = get_usd()
@@ -109,37 +102,39 @@ def make_xlsx(path_input: str = 'input_table.csv', path_output: str = 'out_table
         regular_products = []
         error_products = []
 
-        logger.info("Початок обробки продуктів...")
-        for row in tqdm(data_rows, desc="Обробка продуктів"):
+        logger.info("Starting product processing...")
+        for row in tqdm(data_rows, desc="Processing products"):
             ref_price = parse_ref_price(row, usd_rate)
             if ref_price is None:
-                logger.warning(f"Продукт пропущено через відсутність коректної ref price: {row}")
+                logger.warning(f"Skipping product due to invalid ref price: {row}")
                 continue
 
             try:
                 product = Product.from_url(row[0])
-                if product.has_error:
-                    error_products.append(process_product_row(product, ref_price, full_table))
-                    continue
+                processed_rows = process_product_row(product, ref_price, row[1] if len(row) > 1 else None)
 
-                processed_rows = process_product_row(product, ref_price, full_table)
-                if product.on_sale:
+                if product.has_error:
+                    error_products.append(processed_rows)
+                elif product.on_sale:
                     sale_products.append(processed_rows)
                 else:
                     regular_products.append(processed_rows)
 
             except Exception as e:
-                logger.error(f"Помилка під час обробки продукту за URL {row[0]}: {e}")
-                product = Product(name="Unknown", url=row[0], positions=[], info=str(e), has_error=True)
-                error_products.append(process_product_row(product, ref_price, full_table))
+                logger.error(f"Error processing product at URL {row[0]}: {e}")
+                error_product = Product(name="Unknown", url=row[0], positions=[], info=str(e), has_error=True)
+                error_products.append(process_product_row(error_product, ref_price))
 
-        # Запис акційних продуктів, звичайних, і з помилками
+        # Write sale, regular, and error products in order
         linecount = write_products(worksheet, sale_products, linecount, formats)
         linecount = write_products(worksheet, regular_products, linecount, formats)
         write_products(worksheet, error_products, linecount, formats)
 
         workbook.close()
-        logger.info("Таблиця успішно створена.")
+        logger.info("Excel file created successfully.")
     except Exception as e:
-        logger.critical(f"Таблиця не була створена: {e}")
+        logger.critical(f"Failed to create Excel file: {e}")
         raise e
+
+if __name__ == "__main__":
+    process_product_list(config.get("input_file"), config.get("output_file"))

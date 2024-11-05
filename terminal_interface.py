@@ -72,7 +72,7 @@ def main():
     arguments = argument_parser.parse_args()
     
     if arguments.start != False:
-        make_xlsx.make_xlsx(arguments.path_in, arguments.path_out, arguments.full)
+        make_xlsx.process_product_list(arguments.path_in, arguments.path_out)
     
     
     
