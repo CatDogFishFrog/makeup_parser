@@ -71,7 +71,7 @@ def main():
 
     arguments = argument_parser.parse_args()
     
-    if arguments.start != False:
+    if arguments.start:
         make_xlsx.process_product_list(arguments.path_in, arguments.path_out)
     
     

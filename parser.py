@@ -127,7 +127,6 @@ class Product:
                 variant_obj = Variant(title=title, eu=eu, price=price)
 
                 logger.debug(f"Parsed variant: {variant_obj}")
-                info_list.append(f"Successes {variant_obj.title}")
                 return variant_obj
             else:
                 logger.warning(f"Invalid or missing price for variant '{title if title else '???'}'{f" at {url}" if url else ""}")

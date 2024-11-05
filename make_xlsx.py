@@ -4,12 +4,14 @@ import os
 from typing import List, Optional
 from tqdm import tqdm
 from parser import Product, get_usd
+from singletons.console import ConsoleSingleton
 from singletons.logger import get_logger
 from singletons.config import Config
 
 # Configuration and logger
 config = Config()
 logger = get_logger()
+console_out = ConsoleSingleton()
 
 def load_input_data(path_input: str) -> List[List[str]]:
     """Loads data from the input CSV file."""
@@ -60,10 +62,29 @@ def parse_ref_price(row: List[str], usd_rate: float) -> Optional[int]:
         logger.warning(f"Invalid ref price value: {row}")
     return None
 
-def process_product_row(product: Product, ref_price: int, target_variant: str = None) -> List[List]:
+def process_product_row(product: Product, ref_price: int, target_variant: str = None) -> Optional[List[List]]:
     """Processes a single product for Excel output."""
     rows = []
+
+    if (not product.positions) or (len(product.positions)==0):
+        # If no variants are present, assume it's due to an error and log it.
+        logger.warning(f"No positions found for product: {product.name} from URL {product.url}")
+        if product.has_error:
+            # Return error row if the product has error and no positions
+            row = [
+                product.name,
+                None,
+                ref_price,
+                None,
+                None,
+                product.url,
+                product.info or "Error - no positions"
+            ]
+            rows.append(row)
+        return rows if rows else None
+
     for variant in product.positions:
+        # Filter by target variant name if specified
         if target_variant and target_variant not in (variant.title or ""):
             continue
         effective_price = variant.price * 2 / 3 if product.on_sale else variant.price
@@ -78,7 +99,9 @@ def process_product_row(product: Product, ref_price: int, target_variant: str = 
                 product.info or "",
             ]
             rows.append(row)
-    return rows
+
+    return rows if rows else None
+
 
 def write_products(worksheet, products: List[List], linecount: int, formats) -> int:
     """Writes processed product data to the Excel worksheet."""
@@ -94,7 +117,9 @@ def process_product_list(path_input: str = 'input_table.csv', path_output: str =
     """Main function to create Excel table with processed products."""
     try:
         data_rows = load_input_data(path_input)
+        console_out.info(f"Вхідна таблиця {path_input} завантажена.")
         usd_rate = get_usd()
+        console_out.info(f"Курс USD: {usd_rate}")
         workbook, worksheet, formats = initialize_workbook(path_output)
 
         linecount = 1
@@ -102,6 +127,7 @@ def process_product_list(path_input: str = 'input_table.csv', path_output: str =
         regular_products = []
         error_products = []
 
+        console_out.info("Обробка продуктів...")
         logger.info("Starting product processing...")
         for row in tqdm(data_rows, desc="Processing products"):
             ref_price = parse_ref_price(row, usd_rate)
@@ -112,8 +138,9 @@ def process_product_list(path_input: str = 'input_table.csv', path_output: str =
             try:
                 product = Product.from_url(row[0])
                 processed_rows = process_product_row(product, ref_price, row[1] if len(row) > 1 else None)
-
-                if product.has_error:
+                if processed_rows is None:
+                    continue
+                elif product.has_error:
                     error_products.append(processed_rows)
                 elif product.on_sale:
                     sale_products.append(processed_rows)
@@ -125,15 +152,37 @@ def process_product_list(path_input: str = 'input_table.csv', path_output: str =
                 error_product = Product(name="Unknown", url=row[0], positions=[], info=str(e), has_error=True)
                 error_products.append(process_product_row(error_product, ref_price))
 
+
+        console_out.info("Завершено!")
+
+        products_len = len(regular_products) + len(sale_products) + len(error_products)
+
+        if products_len > 0:
+            console_out.info(f"Оброблено {products_len} продуктів:")
+            if len(regular_products) > 0:
+                console_out.success(f'Серед них {len(regular_products)} звичайних')
+            if len(sale_products) > 0:
+                console_out.warning(f'{len(sale_products)} акційних')
+            if len(error_products) > 0:
+                console_out.error(f'{len(error_products)} з помилками')
+        else:
+            console_out.warning("Але у результаті вийшло 0 продуктів")
+            console_out.info("Тому програма завершується")
+            return
+
+
         # Write sale, regular, and error products in order
+        console_out.info("Запис у файл xlsx...")
         linecount = write_products(worksheet, sale_products, linecount, formats)
         linecount = write_products(worksheet, regular_products, linecount, formats)
         write_products(worksheet, error_products, linecount, formats)
 
         workbook.close()
+        console_out.success(f"Файл {path_output} створено!")
         logger.info("Excel file created successfully.")
     except Exception as e:
         logger.critical(f"Failed to create Excel file: {e}")
+        console_out.critical(f"Непередбачена критична помилка: {e}")
         raise e
 
 if __name__ == "__main__":
