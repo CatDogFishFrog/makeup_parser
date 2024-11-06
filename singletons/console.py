@@ -18,7 +18,7 @@ class ConsoleSingleton(metaclass=SingletonMeta):
     LOG_LEVELS = {
         "DEBUG": 10,
         "INFO": 20,
-        "SUCCESS": 25,  # Adding SUCCESS level between INFO and WARNING
+        "SUCCESS": 25,
         "WARNING": 30,
         "ERROR": 40,
         "CRITICAL": 50

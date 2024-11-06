@@ -111,7 +111,7 @@ class Product:
             sale_text_tag = sale_block.find('a', class_='product-item__attention')
             if sale_text_tag:
                 sale_text = sale_text_tag.text.strip()
-                if "Товар з найменшою вартістю у подарунок" in sale_text:
+                if config.get("sale_text") in sale_text:
                     sale = True
                     info_list.append("1+1=3")
         return sale

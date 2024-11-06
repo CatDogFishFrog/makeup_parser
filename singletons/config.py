@@ -23,10 +23,11 @@ class Config:
                 "input_file": "input_table.csv",
                 "output_file": "out_table.xlsx",
                 "currency_url": "https://obmennovosti.info/city.php?city=45",
+                "usd_regex": r'"USD","quoted":"UAH","bid":"([\d.]+)","ask"',
+                "sale_text": "Товар з найменшою вартістю у подарунок",
                 "log_file": "app.log",
                 "log_level": "WARNING",
                 "user_agent": "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/56.0.2924.87 Safari/537.36 OPR/43.0.2442.991",
-                "usd_regex": r'"USD","quoted":"UAH","bid":"([\d.]+)","ask"'
             }
             with open(self.CONFIG_PATH, 'w') as f:
                 json.dump(default_config, f, indent=4)
