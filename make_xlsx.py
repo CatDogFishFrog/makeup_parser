@@ -45,8 +45,9 @@ def initialize_workbook(path_output: str):
     worksheet.set_column(0, 0, 15)
     worksheet.set_column(1, 1, 35)
     worksheet.set_column(2, 2, 25)
-    worksheet.set_column(3, 4, 12)
-    worksheet.set_column(5, 5, 10)
+    worksheet.set_column(3, 4, 5)
+    worksheet.set_column(4, 4, 5)
+    worksheet.set_column(5, 5, 5)
     worksheet.set_column(6, 6, 50)
 
     return workbook, worksheet, formats
@@ -76,7 +77,8 @@ def process_product_row(product: Product, ref_price: int, target_variant: str = 
                 ref_price,
                 None,
                 None,
-                product.info or "Error - no positions"
+                product.info or "Error - no positions",
+                product.url
             ]
             rows.append(row)
         return rows if rows else None
@@ -94,6 +96,7 @@ def process_product_row(product: Product, ref_price: int, target_variant: str = 
                 effective_price,
                 "EU" if variant.eu else "UA",
                 product.info or "",
+                product.url
             ]
             rows.append(row)
 
@@ -105,13 +108,12 @@ def write_products(worksheet, products: List[List], linecount: int, formats) -> 
     for product in products:
         for row in product:
             worksheet.write(linecount, 0, row[0], formats["italic"])
-            worksheet.write_url(linecount, 1, row[1], string=row[1], tip=row[5])
-            for col_num, cell_data in enumerate(row[2:], start=2):
+            worksheet.write_url(linecount, 1, row[7], string=row[1])
+            for col_num, cell_data in enumerate(row[2:7], start=2):
                 format_to_use = formats["highlight"] if col_num == 4 and "On sale" in row else formats["italic"]
                 worksheet.write(linecount, col_num, cell_data, format_to_use)
             linecount += 1
     return linecount
-
 def process_product_list(path_input: str = 'input_table.csv', path_output: str = 'out_table.xlsx'):
     """Main function to create Excel table with processed products."""
     try:
