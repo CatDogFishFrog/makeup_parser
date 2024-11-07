@@ -62,12 +62,13 @@ class Product:
                 return cls._handle_missing_product(url, info_list)
 
             name = cls._parse_product_name(product_item, url)
+            brand = cls._parse_brand(product_item, url)
             sale = cls._check_sale_status(product_item, info_list)
             positions = cls._parse_variants(product_item, url, info_list)
 
 
-            prod_return = cls(name=name, brand="Unrecognized", url=url, positions=positions, on_sale=sale,
-                    info=", ".join(info_list) if info_list else None) #TODO: Change brand="Unrecognized"
+            prod_return = cls(name=name, brand=brand if brand else "Unrecognized", url=url, positions=positions, on_sale=sale,
+                    info=", ".join(info_list) if info_list else None)
             logger.debug(f"Successfully parsed product: {prod_return}")
             return prod_return
 
@@ -93,6 +94,16 @@ class Product:
             logger.error(f"Product not found at {url}")
         return product_item
 
+    @classmethod
+    def _parse_brand(cls, product_item: BeautifulSoup, url: str) -> str:
+        """Parses the product brand from the HTML content."""
+        brand_tag = product_item.find("span", itemprop="name")
+        if brand_tag:
+            brand = brand_tag.text.strip()
+        else:
+            logger.warning(f"Brand not found for URL: {url}")
+            brand = "Unrecognized Brand"
+        return brand
     @classmethod
     def _parse_product_name(cls, product_item: BeautifulSoup, url: str) -> str:
         """Parses the product name from the HTML content."""
@@ -173,31 +184,34 @@ class Product:
         return cls(name="Unknown", brand="Unrecognized", url=url, positions=[], info=", ".join(info_list), has_error=True)
 
 def get_usd() -> float:
-    """Fetches the current USD to UAH exchange rate."""
+    """
+    Fetches the current USD to UAH exchange rate.
+
+    Returns:
+        float: Current USD to UAH exchange rate
+
+    Raises:
+        ValueError: If exchange rate cannot be fetched or parsed
+    """
     url = config.get("currency_url")
     headers = {"User-Agent": config.get("user_agent")}
     regex_pattern = config.get("usd_regex")
 
     try:
         logger.info(f"Fetching USD exchange rate from {url}")
-        response = requests.get(url, headers=headers)
-        response.raise_for_status()
-        page_content = response.text
+        with requests.get(url, headers=headers, timeout=10) as response:
+            response.raise_for_status()
+            if match := re.search(regex_pattern, response.text):
+                usd_rate = float(match.group(1))
+                logger.info(f"Fetched USD rate: {usd_rate}")
+                return usd_rate
 
-        match = re.search(regex_pattern, page_content)
-        if match:
-            usd_rate = float(match.group(1))
-            logger.info(f"Fetched USD rate: {usd_rate}")
-            return usd_rate
-        else:
-            error_message = "USD exchange rate not found in response."
-            logger.error(error_message)
-            raise ValueError(error_message)
+        raise ValueError("USD exchange rate not found in response")
 
-    except requests.RequestException as e:
+    except (requests.RequestException, ValueError) as e:
         error_message = f"Error fetching exchange rate from {url}: {e}"
         logger.error(error_message)
-        raise ValueError(error_message)
+        raise ValueError(error_message) from e
 
 if __name__ == "__main__":
     product = Product.from_url("https://makeup.com.ua/ua/product/891656/")

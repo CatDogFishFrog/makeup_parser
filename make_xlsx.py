@@ -181,7 +181,7 @@ def process_product_list(path_input: str = 'input_table.csv', path_output: str =
         logger.info("Excel file created successfully.")
     except Exception as e:
         logger.critical(f"Failed to create Excel file: {e}")
-        console_out.critical(f"Непередбачена критична помилка: {e}")
+        console_out.critical(f"Критична помилка: {e}")
         raise e
 
 if __name__ == "__main__":
