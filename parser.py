@@ -55,7 +55,7 @@ class Product:
 
         try:
             response = cls._fetch_product_page(url, headers)
-            soup = BeautifulSoup(response.text, "lxml")
+            soup = BeautifulSoup(response.text, 'html.parser')
 
             product_item = cls._get_product_item(soup, url)
             if not product_item:
