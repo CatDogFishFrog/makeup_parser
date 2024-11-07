@@ -38,15 +38,15 @@ def initialize_workbook(path_output: str):
         "highlight": workbook.add_format({"bg_color": "#C6EFCE", "bold": True}),
     }
 
-    headers = ["Product Name", "Variant", "Ref Price", "Makeup Price", "Region", "URL", "Info"]
+    headers = ["Brand", "Product Name", "Variant", "Ref Price", "Makeup Price", "Region", "Info"]
     for col_num, header in enumerate(headers):
         worksheet.write(0, col_num, header, formats["bold"])
 
-    worksheet.set_column(0, 0, 35)
-    worksheet.set_column(1, 1, 25)
-    worksheet.set_column(2, 3, 12)
-    worksheet.set_column(4, 4, 10)
-    worksheet.set_column(5, 5, 40)
+    worksheet.set_column(0, 0, 15)
+    worksheet.set_column(1, 1, 35)
+    worksheet.set_column(2, 2, 25)
+    worksheet.set_column(3, 4, 12)
+    worksheet.set_column(5, 5, 10)
     worksheet.set_column(6, 6, 50)
 
     return workbook, worksheet, formats
@@ -66,36 +66,33 @@ def process_product_row(product: Product, ref_price: int, target_variant: str = 
     """Processes a single product for Excel output."""
     rows = []
 
-    if (not product.positions) or (len(product.positions)==0):
-        # If no variants are present, assume it's due to an error and log it.
+    if (not product.positions) or (len(product.positions) == 0):
         logger.warning(f"No positions found for product: {product.name} from URL {product.url}")
         if product.has_error:
-            # Return error row if the product has error and no positions
             row = [
+                product.brand,
                 product.name,
                 None,
                 ref_price,
                 None,
                 None,
-                product.url,
                 product.info or "Error - no positions"
             ]
             rows.append(row)
         return rows if rows else None
 
     for variant in product.positions:
-        # Filter by target variant name if specified
         if target_variant and target_variant not in (variant.title or ""):
             continue
         effective_price = variant.price * 2 / 3 if product.on_sale else variant.price
         if effective_price < ref_price or product.has_error:
             row = [
+                product.brand,
                 product.name,
                 variant.title,
                 ref_price,
                 effective_price,
                 "EU" if variant.eu else "UA",
-                product.url,
                 product.info or "",
             ]
             rows.append(row)
@@ -107,8 +104,10 @@ def write_products(worksheet, products: List[List], linecount: int, formats) -> 
     """Writes processed product data to the Excel worksheet."""
     for product in products:
         for row in product:
-            for col_num, cell_data in enumerate(row):
-                format_to_use = formats["highlight"] if col_num == 3 and "On sale" in row else formats["italic"]
+            worksheet.write(linecount, 0, row[0], formats["italic"])
+            worksheet.write_url(linecount, 1, row[1], string=row[1], tip=row[5])
+            for col_num, cell_data in enumerate(row[2:], start=2):
+                format_to_use = formats["highlight"] if col_num == 4 and "On sale" in row else formats["italic"]
                 worksheet.write(linecount, col_num, cell_data, format_to_use)
             linecount += 1
     return linecount
@@ -149,7 +148,7 @@ def process_product_list(path_input: str = 'input_table.csv', path_output: str =
 
             except Exception as e:
                 logger.error(f"Error processing product at URL {row[0]}: {e}")
-                error_product = Product(name="Unknown", url=row[0], positions=[], info=str(e), has_error=True)
+                error_product = Product(name="Unknown", brand="Unrecognized", url=row[0], positions=[], info=str(e), has_error=True)
                 error_products.append(process_product_row(error_product, ref_price))
 
 

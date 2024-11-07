@@ -25,6 +25,7 @@ class Product:
     def __init__(
         self,
         name: str,
+        brand: str,
         url: str,
         positions: List[Variant],
         info: Optional[str] = None,
@@ -32,6 +33,7 @@ class Product:
         has_error: Optional[bool] = False
     ):
         self.name = name
+        self.brand = brand
         self.url = url
         self.positions = positions
         self.info = info
@@ -64,8 +66,8 @@ class Product:
             positions = cls._parse_variants(product_item, url, info_list)
 
 
-            prod_return = cls(name=name, url=url, positions=positions, on_sale=sale,
-                    info=", ".join(info_list) if info_list else None)
+            prod_return = cls(name=name, brand="Unrecognized", url=url, positions=positions, on_sale=sale,
+                    info=", ".join(info_list) if info_list else None) #TODO: Change brand="Unrecognized"
             logger.debug(f"Successfully parsed product: {prod_return}")
             return prod_return
 
@@ -152,7 +154,7 @@ class Product:
         """Handles the case where the product item is not found."""
         error_message = "Product not found"
         info_list.append(error_message)
-        return cls(name="Unknown", url=url, positions=[], info=error_message, has_error=True)
+        return cls(name="Unknown", brand="Unrecognized", url=url, positions=[], info=error_message, has_error=True)
 
     @classmethod
     def _handle_request_error(cls, url: str, exception: Exception, info_list: List[str]) -> "Product":
@@ -160,7 +162,7 @@ class Product:
         error_message = f"Product does not exist! Error fetching product data from URL {url}: {exception}"
         info_list.append("Product does not exist!")
         logger.error(error_message)
-        return cls(name="Unknown", url=url, positions=[], info=", ".join(info_list), has_error=True)
+        return cls(name="Unknown", brand="Unrecognized", url=url, positions=[], info=", ".join(info_list), has_error=True)
 
     @classmethod
     def _handle_unexpected_error(cls, url: str, exception: Exception, info_list: List[str]) -> "Product":
@@ -168,7 +170,7 @@ class Product:
         error_message = "Unexpected error while parsing product data"
         info_list.append("Unexpected error")
         logger.error(f"{error_message} from URL {url}: {exception}")
-        return cls(name="Unknown", url=url, positions=[], info=", ".join(info_list), has_error=True)
+        return cls(name="Unknown", brand="Unrecognized", url=url, positions=[], info=", ".join(info_list), has_error=True)
 
 def get_usd() -> float:
     """Fetches the current USD to UAH exchange rate."""
