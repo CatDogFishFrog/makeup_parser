@@ -9,17 +9,40 @@ import re
 config = Config()
 logger = get_logger()
 
+class SaleParams:
+    """Represents parameters for a sale condition."""
+    def __init__(self, text_for_search: str, apply_to: dict[str, bool], price_formula: str, info_text: Optional[str] = None):
+        self.text_for_search:str = text_for_search
+        self.apply_to: dict[str, bool] = apply_to
+        self.price_formula: str = price_formula
+        self.info_text: Optional[str] = info_text
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "SaleParams":
+        """Creates a SaleParams instance from a dictionary."""
+        return cls(
+            text_for_search=data["text_for_search"],
+            apply_to=data["apply_to"],
+            price_formula=data["price_formula"],
+            info_text=data.get("info_text")
+        )
+
+    def __str__(self) -> str:
+        """String representation for logging and debugging."""
+        return f"SaleParams(text_for_search={self.text_for_search}, price_formula={self.price_formula}, info_text={self.info_text if self.info_text else 'None'})"
+
 class Variant:
     """Represents a single variant of a product with title, EU status, and price."""
-    def __init__(self, title: Optional[str], eu: bool, price: int):
+    def __init__(self, title: Optional[str], eu: bool, price: int, info: Optional[str] = None):
         self.title = title
         self.eu = eu
         self.price = price
+        self.info = info
 
     def __str__(self) -> str:
         """String representation for logging and debugging."""
         eu_status = "EU" if self.eu else "UA"
-        return f"Variant(title={self.title}, price={self.price}, region={eu_status})"
+        return f"Variant(title={self.title}, price={self.price}, region={eu_status}, info={self.info if self.info else 'None'})"
 
 class Product:
     def __init__(
@@ -44,7 +67,7 @@ class Product:
         """String representation for logging and debugging."""
         sale_status = "On sale" if self.on_sale else "Regular"
         error_status = "Error encountered" if self.has_error else "No errors"
-        return f"Product(name={self.name}, url={self.url}, sale_status={sale_status}, error_status={error_status})"
+        return f"Product(brand={self.brand}, name={self.name}, url={self.url}, sale_status={sale_status}, error_status={error_status})"
 
     @classmethod
     def from_url(cls, url: str) -> "Product":
@@ -63,8 +86,9 @@ class Product:
 
             name = cls._parse_product_name(product_item, url)
             brand = cls._parse_brand(product_item, url)
-            sale = cls._check_sale_status(product_item, info_list)
-            positions = cls._parse_variants(product_item, url, info_list)
+            sale_params = cls._check_sale_status(product_item)
+            sale = bool(sale_params)
+            positions = cls._parse_variants(product_item, url, sale_params)
 
 
             prod_return = cls(name=name, brand=brand if brand else "Unrecognized", url=url, positions=positions, on_sale=sale,
@@ -116,47 +140,89 @@ class Product:
         return name
 
     @classmethod
-    def _check_sale_status(cls, product_item, info_list: List[str]) -> bool:
+    def _check_sale_status(cls, product_item) -> SaleParams | None:
         """Checks if the product is on sale and updates info_list with sale details."""
-        sale = False
-        sale_block = product_item.find("div", class_="product-item__message")
-        if sale_block:
-            sale_text_tag = sale_block.find('a', class_='product-item__attention')
-            if sale_text_tag:
+        sale = None
+        if sale_block := product_item.find("div", class_="product-item__message"):
+            if sale_text_tag := sale_block.find('a', class_='product-item__attention'):
                 sale_text = sale_text_tag.text.strip()
-                if config.get("sale_text") in sale_text:
-                    sale = True
-                    info_list.append("1+1=3")
+                for sale_item in config.get("sale_list", []):
+                    if sale_item["text_for_search"] in sale_text:
+                        sale = SaleParams.from_dict(sale_item)
+                        logger.debug(f"Sale detected: {sale_item['info_text']}")
+                        break
         return sale
 
     @classmethod
-    def _parse_variant(cls, variant: BeautifulSoup, info_list: List[str], url: Optional[str]) -> Variant:
-        title = variant.get("title")
-        try:
-            eu = variant.find("i", class_="eu rus") is not None
-            price_str = variant.get("data-price")
-            if price_str and price_str.isdigit():
-                price = int(price_str)
-                variant_obj = Variant(title=title, eu=eu, price=price)
-
-                logger.debug(f"Parsed variant: {variant_obj}")
-                return variant_obj
-            else:
-                logger.warning(f"Invalid or missing price for variant '{title if title else '???'}'{f" at {url}" if url else ""}")
-                info_list.append(f"Invalid price for '{title if title else '???'}'")
-        except Exception as e:
-            logger.error(f"Error parsing variant '{title if title else '???'}': {e}")
-            info_list.append(f"Error variant '{title if title else '???'}'")
+    def _extract_price(cls, variant: BeautifulSoup, title: Optional[str], url: Optional[str]) -> Optional[int]:
+        """Extract and validate the price from the variant element."""
+        price_str = variant.get("data-price")
+        if not price_str or not price_str.isdigit():
+            logger.warning(f"Invalid/missing price for variant '{title or '???'}'{f' at {url}' if url else ''}")
+            return None
+        return int(price_str)
 
     @classmethod
-    def _parse_variants(cls, product_item, url: str, info_list: List[str]) -> List[Variant]:
+    def _calculate_final_price(cls, base_price: int, eu: bool, sale_params: Optional[SaleParams]) -> (int, str):
+        """Calculate the final price using the sale formula if available."""
+        price = base_price
+        variant_info = ''
+
+        if sale_params:
+            if (eu and sale_params.apply_to["eu"]) or (not eu and sale_params.apply_to["ua"]):
+                try:
+                    x = base_price  # x is used in eval formula
+                    price = eval(sale_params.price_formula)
+                    variant_info = sale_params.info_text or ''
+                    logger.debug(f"Applied sale formula: {sale_params.price_formula}")
+                except Exception as e:
+                    logger.error(f"Error applying sale formula '{sale_params.price_formula}': {e}")
+                    variant_info = f"{sale_params.info_text + ', but ' if sale_params.info_text else ''}Error applying sale formula '{sale_params.price_formula}'"
+                    price = base_price
+
+        return price, variant_info
+
+    @classmethod
+    def _create_variant_object(cls, title: Optional[str], eu: bool, final_price: int, info: str) -> Variant:
+        """Create a Variant object from parsed details."""
+        variant_obj = Variant(title=title, eu=eu, price=final_price, info=info)
+        logger.debug(f"Parsed variant: {variant_obj}")
+        return variant_obj
+
+    @classmethod
+    def _parse_variant(cls, variant: BeautifulSoup, url: Optional[str], sale_params: Optional[SaleParams]) -> Optional[
+        Variant]:
+        """Parse a single variant from BeautifulSoup element into a Variant object."""
+        title = variant.get("title")
+
+        try:
+            # Check if variant has EU status
+            eu = bool(variant.find("i", class_="eu rus"))
+
+            # Extract and validate price
+            base_price = cls._extract_price(variant, title, url)
+            if base_price is None:
+                return None
+
+            # Calculate the final price considering any sale
+            final_price, variant_info = cls._calculate_final_price(base_price, eu, sale_params)
+
+            # Create and return the Variant object
+            return cls._create_variant_object(title, eu, final_price, variant_info)
+
+        except Exception as e:
+            logger.error(f"Error parsing variant '{title or '???'}' from {url if url else 'unknown source'}: {e}")
+            return None
+
+    @classmethod
+    def _parse_variants(cls, product_item, url: str, sale_params: Optional[SaleParams] ) -> List[Variant]:
         """Parses all available product variants and returns them as a list."""
         positions = []
         product_item__buy = product_item.find("div", class_="product-item__buy")
         if product_item__buy:
             variants = product_item__buy.find_all("div", class_="variant")
             for variant in variants:
-                positions.append(cls._parse_variant(variant, info_list, url))
+                positions.append(cls._parse_variant(variant, url, sale_params))
 
         return positions
 
@@ -170,8 +236,8 @@ class Product:
     @classmethod
     def _handle_request_error(cls, url: str, exception: Exception, info_list: List[str]) -> "Product":
         """Handles request exceptions and logs an appropriate error."""
-        error_message = f"Product does not exist! Error fetching product data from URL {url}: {exception}"
-        info_list.append("Product does not exist!")
+        error_message = f"Request error! Error fetching product data from URL {url}: {exception}"
+        info_list.append("Request error!")
         logger.error(error_message)
         return cls(name="Unknown", brand="Unrecognized", url=url, positions=[], info=", ".join(info_list), has_error=True)
 
@@ -214,8 +280,7 @@ def get_usd() -> float:
         raise ValueError(error_message) from e
 
 if __name__ == "__main__":
-    product = Product.from_url("https://makeup.com.ua/ua/product/891656/")
-    product2 = Product.from_url("https://makeup.com.ua/ua/product/12359/")
+    product = Product.from_url("https://makeup.com.ua/ua/product/373819/")
     print(product)
     for position in product.positions:
         print(position)
