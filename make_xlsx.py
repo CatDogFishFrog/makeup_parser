@@ -86,14 +86,13 @@ def process_product_row(product: Product, ref_price: int, target_variant: str = 
     for variant in product.positions:
         if target_variant and target_variant not in (variant.title or ""):
             continue
-        effective_price = variant.price * 2 / 3 if product.on_sale else variant.price
-        if effective_price < ref_price or product.has_error:
+        if variant.price < ref_price or product.has_error:
             row = [
                 product.brand,
                 product.name,
                 variant.title,
                 ref_price,
-                effective_price,
+                variant.price,
                 "EU" if variant.eu else "UA",
                 product.info or "",
                 product.url
@@ -143,7 +142,7 @@ def process_product_list(path_input: str = 'input_table.csv', path_output: str =
                     continue
                 elif product.has_error:
                     error_products.append(processed_rows)
-                elif product.on_sale:
+                elif product.sale_params:
                     sale_products.append(processed_rows)
                 else:
                     regular_products.append(processed_rows)
