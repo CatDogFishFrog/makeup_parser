@@ -12,7 +12,7 @@ class Config:
         "output_file": "out_table.xlsx",
         "usd_url": "https://obmennovosti.info/city.php?city=45",
         "usd_regex": r'"USD","quoted":"UAH","bid":"[\d.]+","ask":"([\d.]+)"',
-        "usd_regex_comment": "https://inweb.ua/blog/ua/regulyarnye-vyrazheniya/",
+        "_usd_regex_comment": "https://inweb.ua/blog/ua/regulyarnye-vyrazheniya/",
         "log_file": "app.log",
         "log_level": "WARNING",
         "user_agent": "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/56.0.2924.87 Safari/537.36 OPR/43.0.2442.991",
@@ -42,29 +42,22 @@ class Config:
                 "price_font_color_hex": None
             }
         ],
+        "headers_format": {
+            "background_color_hex": None, "font_color_hex": None, "bold": True, "italic": True, "underline": False,
+            "font_name": None, "font_size": 14, "align": "center"
+        },
+        "striped_zebra":  True,
         "xlsx_table_settings": {
-            "_comment": 'Types: "Brand", "Name" - Product Name, "Variant" - Variant name, "RPrice" - Reference price from input table, "MPrice" - Price from Makeup website (with sale price recalculating), "Region" - EU or UA, "Info" - info text with same information (sale, error)',
-            "column_1": {"type": "Brand", "width": 30, "header": "Brand", "background_color_hex": None,
-                         "font_color_hex": None, "bold": True, "italic": False, "underline": False, "font_name": None,
+            "_comment": 'Types: "Brand" - Brand, "Name" - Product Name, "Variant" - Variant name, "RPrice" - Reference price from input table, "MPrice" - Price from Makeup website (with sale price recalculating), "Region" - EU or UA, "Info" - info text with same information (sale, error), "url" - product url, "error" - Print "Error" if product have error, "SaleFormula" - formula from sale parameters if product has sale',
+            "column_1": {"type": "Brand", "width": 20, "header": "Brand", "background_color_hex": None,
+                         "font_color_hex": None, "bold": False, "italic": True, "underline": False, "font_name": None,
                          "font_size": None, "align": None},
-            "column_2": {"type": "Name", "width": 30, "header": "Product Name", "background_color_hex": None,
-                         "font_color_hex": None, "bold": True, "italic": False, "underline": False, "font_name": None,
-                         "font_size": None, "align": None},
-            "column_3": {"type": "Variant", "width": 30, "header": "Variant", "background_color_hex": None,
-                         "font_color_hex": None, "bold": True, "italic": False, "underline": False, "font_name": None,
-                         "font_size": None, "align": None},
-            "column_4": {"type": "RPrice", "width": 30, "header": "Reference price", "background_color_hex": None,
-                         "font_color_hex": None, "bold": True, "italic": False, "underline": False, "font_name": None,
-                         "font_size": None, "align": None},
-            "column_5": {"type": "MPrice", "width": 30, "header": "Makeup Price", "background_color_hex": None,
-                         "font_color_hex": None, "bold": True, "italic": False, "underline": False, "font_name": None,
-                         "font_size": None, "align": None},
-            "column_6": {"type": "Region", "width": 30, "header": "Region", "background_color_hex": None,
-                         "font_color_hex": None, "bold": True, "italic": False, "underline": False, "font_name": None,
-                         "font_size": None, "align": None},
-            "column_7": {"type": "Info", "width": 30, "header": "Info", "background_color_hex": None,
-                         "font_color_hex": None, "bold": True, "italic": False, "underline": False, "font_name": None,
-                         "font_size": None, "align": None},
+            "column_2": {"type": "Name", "width": 50, "header": "Product"},
+            "column_3": {"type": "Variant", "width": 15, "header": "Variant"},
+            "column_4": {"type": "RPrice", "width": 7, "header": "RefPrice"},
+            "column_5": {"type": "MPrice", "width": 7, "header": "Makeup Price", "background_color_hex": "#fff200"},
+            "column_6": {"type": "Region", "width": 7, "header": "Region", "bold": True},
+            "column_7": {"type": "Info", "width": 70, "header": "Info"},
         }
     }
 
