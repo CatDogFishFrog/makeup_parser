@@ -2,7 +2,7 @@ from dataclasses import field, dataclass
 from typing import Optional, Dict, Any
 
 from singletons.logger import get_logger
-from utils.hex_tools import is_hex_color
+from utils.hex_tools import is_hex_color, normalize_hex_color
 
 logger = get_logger()
 
@@ -52,9 +52,7 @@ class XlsxColumnSetting:
         """Validate color hex codes."""
         for color_attr in ('background_color_hex', 'font_color_hex'):
             color = getattr(self, color_attr)
-            if not is_hex_color(color):
-                logger.warning(f"Invalid {color_attr} value: {color}. Using default value.")
-                setattr(self, color_attr, self.DEFAULT_SETTINGS[color_attr])
+            setattr(self, color_attr, normalize_hex_color(color) if is_hex_color(color) else self.DEFAULT_SETTINGS[color_attr])
 
     def _validate_align(self):
         """Validate alignment value."""

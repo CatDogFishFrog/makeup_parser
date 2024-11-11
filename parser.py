@@ -5,6 +5,8 @@ from singletons.logger import get_logger
 from singletons.config import Config
 import re
 
+from utils.hex_tools import normalize_hex_color
+
 # Load configuration and setup logger
 config = Config()
 logger = get_logger()
@@ -16,8 +18,8 @@ class SaleParams:
         self.apply_to: dict[str, bool] = apply_to
         self.price_formula: str = price_formula
         self.info_text: Optional[str] = info_text
-        self.price_background_color_hex = price_background_color_hex
-        self.price_font_color_hex = price_font_color_hex
+        self.price_background_color_hex = normalize_hex_color(price_background_color_hex)
+        self.price_font_color_hex = normalize_hex_color(price_font_color_hex)
 
     @classmethod
     def from_dict(cls, data: dict) -> "SaleParams":
