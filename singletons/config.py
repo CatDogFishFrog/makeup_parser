@@ -49,14 +49,14 @@ class Config:
         "striped_zebra":  True,
         "xlsx_table_settings": {
             "_comment": 'Types: "Brand" - Brand, "Name" - Product Name, "Variant" - Variant name, "RPrice" - Reference price from input table, "MPrice" - Price from Makeup website (with sale price recalculating), "Region" - EU or UA, "Info" - info text with same information (sale, error), "url" - product url, "error" - Print "Error" if product have error, "SaleFormula" - formula from sale parameters if product has sale',
-            "column_1": {"type": "Brand", "width": 20, "header": "Brand", "background_color_hex": None,
+            "column_1": {"type": "Brand", "width": 15, "header": "Brand", "background_color_hex": None,
                          "font_color_hex": None, "bold": False, "italic": True, "underline": False, "font_name": None,
                          "font_size": None, "align": None},
-            "column_2": {"type": "Name", "width": 50, "header": "Product"},
+            "column_2": {"type": "Name", "width": 40, "header": "Product"},
             "column_3": {"type": "Variant", "width": 15, "header": "Variant"},
-            "column_4": {"type": "RPrice", "width": 7, "header": "RefPrice"},
-            "column_5": {"type": "MPrice", "width": 7, "header": "Makeup Price", "background_color_hex": "#fff200"},
-            "column_6": {"type": "Region", "width": 7, "header": "Region", "bold": True},
+            "column_4": {"type": "RPrice", "width": 7, "header": "RP"},
+            "column_5": {"type": "MPrice", "width": 7, "header": "MP", "background_color_hex": "#fff200"},
+            "column_6": {"type": "Region", "width": 7, "header": "Reg", "bold": True},
             "column_7": {"type": "Info", "width": 70, "header": "Info"},
         }
     }

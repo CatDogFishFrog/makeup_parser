@@ -2,7 +2,7 @@ from typing import Any, Dict, List, Union, Optional
 from functools import lru_cache
 from utils.hex_tools import darken_color
 import xlsxwriter
-from parser import SaleParams
+from parser import SaleParams, Product
 from singletons.config import Config
 from xlsx.xlsx_column_setting import XlsxColumnSetting
 from singletons.logger import get_logger
@@ -39,10 +39,8 @@ class XlsxTableGenerator:
         self._cell_type_mapping = self._init_cell_type_mapping()
         self.headers_setting = XlsxColumnSetting.from_dict(self.config.get("headers_format", self.HEADER_FORMAT))
         self.striped_zebra = self.config.get("striped_zebra", False)
-        logger.debug("Setting headers")
         self._set_headers()
 
-        logger.debug("Setting column widths")
         for col_index, setting in enumerate(self.table_settings):
             self.worksheet.set_column(col_index, col_index, setting.width)
         logger.info("XlsxTableGenerator initialized successfully")
@@ -59,9 +57,9 @@ class XlsxTableGenerator:
             'rprice': lambda p, v, r: r,
             'mprice': lambda p, v, r: v.price,
             'variant': lambda p, v, r: v.title,
-            'info': lambda p, v, r: f"{p.info}, {v.info}",
+            'info': lambda p, v, r: ", ".join((info for info in (p.info, v.info) if info is not None)),
             'region': lambda p, v, r: "EU" if v.eu else "UA",
-            'saleformula': lambda p, v, r: v.sale_params.price_formula if v.sale_params else None
+            'saleformula': lambda p, v, r: v.sale_params.price_formula if v.sale_params else ""
         }
 
     def _load_table_settings(self) -> List[XlsxColumnSetting]:
@@ -103,8 +101,8 @@ class XlsxTableGenerator:
         """Get cell format based on settings and sale parameters."""
         logger.debug("Getting cell format with settings: {}", setting)
         return {
-            "bg_color": sale_params.price_background_color_hex if sale_params else setting.background_color,
-            "font_color": sale_params.price_font_color_hex if sale_params else setting.font_color,
+            "bg_color": sale_params.price_background_color_hex if sale_params else setting.background_color_hex,
+            "font_color": sale_params.price_font_color_hex if sale_params else setting.font_color_hex,
             "font_name": setting.font_name,
             "font_size": setting.font_size,
             "bold": setting.bold,
@@ -113,7 +111,7 @@ class XlsxTableGenerator:
             "align": setting.align
         }
 
-    def add_product(self, product: Any, ref_price: Union[int, float]) -> None:
+    def add_product(self, product: Product, ref_price: Union[int, float]) -> None:
         """Add product data with error handling."""
         logger.info("Adding product {} with reference price {}", product.name, ref_price)
         try:
@@ -130,7 +128,6 @@ class XlsxTableGenerator:
 
     def _write_row(self, row: List[Any], sale_params: Optional[SaleParams] = None) -> None:
         """Write a row with error handling."""
-        logger.debug("Writing row at index {} with sale params: {}", self.row_index, sale_params)
         try:
             for col_index, value in enumerate(row):
                 cell_format_dict = self._get_cell_format(self.table_settings[col_index], sale_params)
@@ -141,7 +138,6 @@ class XlsxTableGenerator:
                 cell_format = self.workbook.add_format(cell_format_dict)
                 self.worksheet.write(self.row_index, col_index, value, cell_format)
             self.row_index += 1
-            logger.debug("Successfully wrote row at index {}", self.row_index - 1)
         except Exception as e:
             logger.error("Failed to write row at index {}: {}", self.row_index, str(e))
             raise RuntimeError(f"Failed to write row: {str(e)}")
