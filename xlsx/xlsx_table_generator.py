@@ -51,8 +51,7 @@ class XlsxTableGenerator:
         logger.debug("Initializing cell type mapping")
         return {
             'brand': lambda p, v, r: p.brand,
-            'name': lambda p, v, r: p.name,
-            'url': lambda p, v, r: p.url,
+            'name': lambda p, v, r: (p.name, p.url),  # Tuple to identify as hyperlink
             'error': lambda p, v, r: "ERROR" if p.has_error else "",
             'rprice': lambda p, v, r: r,
             'mprice': lambda p, v, r: v.price,
@@ -80,7 +79,6 @@ class XlsxTableGenerator:
 
     def _set_headers(self) -> None:
         """Set table headers with validated formatting using XlsxColumnSetting."""
-        logger.debug("Setting table headers")
         header_format = self.workbook.add_format(self._get_cell_format(self.headers_setting))
         for col_index, setting in enumerate(self.table_settings):
             self.worksheet.write(0, col_index, setting.header, header_format)
@@ -127,20 +125,22 @@ class XlsxTableGenerator:
             raise RuntimeError(f"Failed to add product: {str(e)}")
 
     def _write_row(self, row: List[Any], sale_params: Optional[SaleParams] = None) -> None:
-        """Write a row with error handling."""
-        try:
-            for col_index, value in enumerate(row):
-                cell_format_dict = self._get_cell_format(self.table_settings[col_index], sale_params)
-                if self.striped_zebra and self.row_index % 2 != 0:
-                    cell_format_dict["bg_color"] = darken_color(cell_format_dict["bg_color"])
-                    logger.trace("Applied zebra striping to row {}", self.row_index)
+        """Write a row, creating hyperlinks for 'name' type cells."""
+        for col_index, value in enumerate(row):
+            setting = self.table_settings[col_index]
+            cell_format_dict = self._get_cell_format(setting, sale_params)
+            if self.striped_zebra and self.row_index % 2 != 0:
+                cell_format_dict["bg_color"] = darken_color(cell_format_dict["bg_color"])
 
-                cell_format = self.workbook.add_format(cell_format_dict)
+            cell_format = self.workbook.add_format(cell_format_dict)
+
+            # Check if the cell is a hyperlink for "Product Name" type
+            if setting.type.lower() == "name" and isinstance(value, tuple) and len(value) == 2:
+                text, url = value
+                self.worksheet.write_url(self.row_index, col_index, url, cell_format, string=text)
+            else:
                 self.worksheet.write(self.row_index, col_index, value, cell_format)
-            self.row_index += 1
-        except Exception as e:
-            logger.error("Failed to write row at index {}: {}", self.row_index, str(e))
-            raise RuntimeError(f"Failed to write row: {str(e)}")
+        self.row_index += 1
 
     def finalize(self) -> None:
         """Safely close the workbook."""
