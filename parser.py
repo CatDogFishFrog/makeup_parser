@@ -58,7 +58,8 @@ class Product:
         positions: List[Variant],
         info: Optional[str] = None,
         sale_params: Optional[SaleParams] = None,
-        has_error: Optional[bool] = False
+        has_error: Optional[bool] = False,
+        ref_price: Optional[int] = None
     ):
         self.name = name
         self.brand = brand
@@ -67,6 +68,7 @@ class Product:
         self.info = info
         self.sale_params = sale_params
         self.has_error = has_error
+        self.ref_price = ref_price
 
     def __str__(self) -> str:
         """String representation for logging and debugging."""

@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from typing import Any, Dict, List, Union, Optional
 from functools import lru_cache
 from utils.hex_tools import darken_color
@@ -8,6 +9,13 @@ from xlsx.xlsx_column_setting import XlsxColumnSetting
 from singletons.logger import get_logger
 
 logger = get_logger()
+
+@dataclass
+class CellData:
+    value: Any
+    format_dict: Dict[str, Any]
+    is_hyperlink: bool = False
+    url: Optional[str] = None
 
 class XlsxTableGenerator:
     """Class for generating Excel tables."""
@@ -56,7 +64,12 @@ class XlsxTableGenerator:
             'rprice': lambda p, v, r: r,
             'mprice': lambda p, v, r: v.price,
             'variant': lambda p, v, r: v.title,
-            'info': lambda p, v, r: ", ".join((info for info in (p.info, v.info) if info is not None)),
+            'info': lambda p, v, r: ", ".join(
+                info for info in (
+                    getattr(p, 'info', None),
+                    getattr(v, 'info', None)
+                ) if info is not None
+            ),
             'region': lambda p, v, r: "EU" if v.eu else "UA",
             'saleformula': lambda p, v, r: v.sale_params.price_formula if v.sale_params else ""
         }
@@ -85,22 +98,81 @@ class XlsxTableGenerator:
         logger.debug("Table headers set successfully")
 
     @lru_cache(maxsize=128)
-    def _get_cell_value(self, cell_type: str, product: Any, variant: Any, ref_price: Any) -> Any:
-        """Get cell value with error handling."""
-        handler = self._cell_type_mapping.get(cell_type.lower())
+    def _get_cell_value(
+            self,
+            cell_type: str,
+            product: Product,
+            variant: Optional[Any],
+            ref_price: Union[int, float]
+    ) -> Any:
+        """
+        Get cell value with error handling and caching.
+
+        Args:
+            cell_type: Type of cell to generate value for
+            product: Product object
+            variant: Optional variant object
+            ref_price: Reference price
+
+        Returns:
+            Cell value or None if handler not found or error occurs
+        """
         try:
-            return handler(product, variant, ref_price) if handler else None
+            handler = self._cell_type_mapping.get(cell_type.lower())
+            if not handler:
+                logger.warning(f"No handler found for cell type: {cell_type}")
+                return None
+
+            return handler(product, variant, ref_price)
+
         except AttributeError as e:
-            logger.warning(f"Failed to get cell value for type {cell_type}: {str(e)}")
+            logger.warning(
+                "Failed to get cell value for type {}: {}",
+                cell_type,
+                str(e)
+            )
+            return None
+        except Exception as e:
+            logger.error(
+                "Unexpected error getting cell value for type {}: {}",
+                cell_type,
+                str(e)
+            )
             return None
 
-    @staticmethod
-    def _get_cell_format(setting: XlsxColumnSetting, sale_params: Optional[SaleParams] = None) -> Dict[str, Any]:
-        """Get cell format based on settings and sale parameters."""
-        logger.debug("Getting cell format with settings: {}", setting)
+    def _get_cell_format(
+            self,
+            setting: XlsxColumnSetting,
+            sale_params: Optional[SaleParams] = None,
+            is_striped: bool = False
+    ) -> Dict[str, Any]:
+        """
+        Get cell format based on settings and parameters.
+
+        Args:
+            setting: Column setting object
+            sale_params: Optional sale parameters
+            is_striped: Whether to apply striped formatting
+
+        Returns:
+            Dictionary containing cell formatting
+        """
+        bg_color = (
+            sale_params.price_background_color_hex
+            if sale_params
+            else setting.background_color_hex
+        )
+
+        if is_striped:
+            bg_color = darken_color(bg_color)
+
         return {
-            "bg_color": sale_params.price_background_color_hex if sale_params else setting.background_color_hex,
-            "font_color": sale_params.price_font_color_hex if sale_params else setting.font_color_hex,
+            "bg_color": bg_color,
+            "font_color": (
+                sale_params.price_font_color_hex
+                if sale_params
+                else setting.font_color_hex
+            ),
             "font_name": setting.font_name,
             "font_size": setting.font_size,
             "bold": setting.bold,
@@ -109,38 +181,134 @@ class XlsxTableGenerator:
             "align": setting.align
         }
 
+    def _prepare_cell_data(
+            self,
+            value: Any,
+            setting: XlsxColumnSetting,
+            sale_params: Optional[SaleParams],
+            is_striped: bool
+    ) -> CellData:
+        """
+        Prepare cell data including value and formatting.
+
+        Args:
+            value: Cell value
+            setting: Column setting
+            sale_params: Optional sale parameters
+            is_striped: Whether to apply striped formatting
+
+        Returns:
+            CellData object containing cell information
+        """
+        format_dict = self._get_cell_format(setting, sale_params, is_striped)
+
+        if setting.type.lower() == "name" and isinstance(value, tuple) and len(value) == 2:
+            text, url = value
+            return CellData(
+                value=text,
+                format_dict=format_dict,
+                is_hyperlink=True,
+                url=url
+            )
+
+        return CellData(
+            value=value,
+            format_dict=format_dict
+        )
+
+    def _write_cell(self, cell_data: CellData, row: int, col: int) -> None:
+        """
+        Write a single cell to the worksheet.
+
+        Args:
+            cell_data: CellData object containing cell information
+            row: Row index
+            col: Column index
+        """
+        cell_format = self.workbook.add_format(cell_data.format_dict)
+
+        if cell_data.is_hyperlink:
+            self.worksheet.write_url(
+                row,
+                col,
+                cell_data.url,
+                cell_format,
+                string=cell_data.value
+            )
+        else:
+            self.worksheet.write(row, col, cell_data.value, cell_format)
+
     def add_product(self, product: Product, ref_price: Union[int, float]) -> None:
-        """Add product data with error handling."""
-        logger.info("Adding product {} with reference price {}", product.name, ref_price)
+        """
+        Add product data to the worksheet.
+
+        Args:
+            product: Product object to add
+            ref_price: Reference price
+
+        Raises:
+            RuntimeError: If there's an error adding the product
+        """
         try:
+            if not product.positions:
+                self._add_product_without_variants(product, ref_price)
+                return
+
             for variant in product.positions:
-                logger.debug("Processing variant: {}", variant.title)
-                row_data = [
-                    self._get_cell_value(setting.type, product, variant, ref_price)
-                    for setting in self.table_settings
-                ]
-                self._write_row(row_data, getattr(variant, 'sale_params', None))
+                self._add_product_variant(product, variant, ref_price)
+
         except Exception as e:
-            logger.error("Failed to add product {}: {}", product.name, str(e))
-            raise RuntimeError(f"Failed to add product: {str(e)}")
+            error_msg = f"Failed to add product {product.name}: {str(e)}"
+            logger.error(error_msg)
+            raise RuntimeError(error_msg)
 
-    def _write_row(self, row: List[Any], sale_params: Optional[SaleParams] = None) -> None:
-        """Write a row, creating hyperlinks for 'name' type cells."""
-        for col_index, value in enumerate(row):
+    def write_row(self, row_data: List[Any], sale_params: Optional[SaleParams] = None) -> None:
+        """
+        Write a complete row to the worksheet.
+
+        Args:
+            row_data: List of values to write
+            sale_params: Optional sale parameters
+        """
+        is_striped = self.striped_zebra and self.row_index % 2 != 0
+
+        for col_index, value in enumerate(row_data):
             setting = self.table_settings[col_index]
-            cell_format_dict = self._get_cell_format(setting, sale_params)
-            if self.striped_zebra and self.row_index % 2 != 0:
-                cell_format_dict["bg_color"] = darken_color(cell_format_dict["bg_color"])
+            cell_data = self._prepare_cell_data(
+                value,
+                setting,
+                sale_params,
+                is_striped
+            )
+            self._write_cell(cell_data, self.row_index, col_index)
 
-            cell_format = self.workbook.add_format(cell_format_dict)
-
-            # Check if the cell is a hyperlink for "Product Name" type
-            if setting.type.lower() == "name" and isinstance(value, tuple) and len(value) == 2:
-                text, url = value
-                self.worksheet.write_url(self.row_index, col_index, url, cell_format, string=text)
-            else:
-                self.worksheet.write(self.row_index, col_index, value, cell_format)
         self.row_index += 1
+
+    def _add_product_variant(
+            self,
+            product: Product,
+            variant: Any,
+            ref_price: Union[int, float]
+    ) -> None:
+        """Add a single product variant to the worksheet."""
+        logger.debug("Processing variant: {}", variant.title)
+        row_data = [
+            self._get_cell_value(setting.type, product, variant, ref_price)
+            for setting in self.table_settings
+        ]
+        self.write_row(row_data, getattr(variant, 'sale_params', None))
+
+    def _add_product_without_variants(
+            self,
+            product: Product,
+            ref_price: Union[int, float]
+    ) -> None:
+        """Add a product without variants to the worksheet."""
+        row_data = [
+            self._get_cell_value(setting.type, product, None, ref_price)
+            for setting in self.table_settings
+        ]
+        self.write_row(row_data, None)
 
     def finalize(self) -> None:
         """Safely close the workbook."""
